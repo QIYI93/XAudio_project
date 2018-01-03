@@ -19,6 +19,7 @@
 # Fortran module files
 *.mod
 *.smod
+*.db
 
 # Compiled Static libraries
 *.lai
@@ -30,3 +31,9 @@
 *.exe
 *.out
 *.app
+
+# Folders
+/Bin/
+/Debug/
+/Release/
+/.vs/
