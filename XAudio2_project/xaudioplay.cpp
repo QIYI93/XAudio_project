@@ -1,4 +1,5 @@
 #include "xaudioplay.h"
+#include <cstdio>
 
 VoiceCallBack::VoiceCallBack()
     :m_hBufferEndEvent(CreateEvent(NULL, FALSE, FALSE, NULL))
@@ -12,6 +13,36 @@ VoiceCallBack::VoiceCallBack()
 VoiceCallBack::~VoiceCallBack()
 {
     CloseHandle(m_hBufferEndEvent);
+}
+
+void VoiceCallBack::OnBufferEnd(void *bufferContext)
+{
+    if (bufferContext == nullptr)
+    {
+        m_audioPlay->m_sourceVoice->GetState(&m_state);
+        m_audioPlay->m_unProcessedBufferCount = m_state.BuffersQueued;
+    }
+    else
+    {
+        m_currentContext = *((int *)bufferContext) + 1;
+        if (m_currentContext > m_lastContext)
+            m_count += m_currentContext - m_lastContext;
+        else if (m_currentContext < m_lastContext)
+            m_count += m_audioPlay->m_maxBufferCount + m_currentContext - m_lastContext;
+        m_lastContext = m_currentContext;
+
+        m_audioPlay->m_unProcessedBufferCount -= m_count;
+    }
+    m_count = 0;
+    while (m_audioPlay->m_unReadingBufferCount)
+    {
+        m_audioPlay->m_sourceVoice->SubmitSourceBuffer(&m_audioPlay->m_audio2Buffer[m_audioPlay->m_readingBufferNumber], nullptr);
+        m_audioPlay->m_readingBufferNumber = (1 + m_audioPlay->m_readingBufferNumber) % m_audioPlay->m_maxBufferCount;
+        m_audioPlay->m_unProcessedBufferCount++;
+        m_audioPlay->m_unReadingBufferCount--;
+    }
+
+    SetEvent(m_hBufferEndEvent);
 }
 
 XAudioPlay::XAudioPlay()
@@ -34,13 +65,14 @@ XAudioPlay::XAudioPlay()
         return;
 
     setBufferSize(DEF_MaxBufferCount, DEF_StreamingBufferSize);
+    m_waveFormat.nChannels = 2; //default
 
-    lRet = m_XAudio2->CreateSourceVoice(&m_sourceVoice, 
+    lRet = m_XAudio2->CreateSourceVoice(&m_sourceVoice,
         &m_waveFormat,
-        NULL, 
+        NULL,
         XAUDIO2_DEFAULT_FREQ_RATIO,
         &m_voiceCallBack,
-        nullptr, 
+        nullptr,
         nullptr);
 
     if (FAILED(lRet))
@@ -52,6 +84,19 @@ XAudioPlay::XAudioPlay()
 
 XAudioPlay::~XAudioPlay()
 {
+    deleteBuffer();
+}
+
+void XAudioPlay::deleteBuffer()
+{
+    for (int i = 0; i < m_maxBufferCount; ++i)
+    {
+        delete[] m_audioData[i];
+        if (m_audio2Buffer[i].pContext)
+            delete m_audio2Buffer[i].pContext;
+    }
+    delete[] m_audioData;
+    delete[] m_audio2Buffer;
 }
 
 void XAudioPlay::setBufferSize(int maxBufferCount, int streamingBufferSize)
@@ -59,14 +104,7 @@ void XAudioPlay::setBufferSize(int maxBufferCount, int streamingBufferSize)
     if (m_maxBufferCount != maxBufferCount || m_streamingBufferSize != streamingBufferSize)
     {
         stopPlaying();
-        for (int i = 0; i < m_maxBufferCount; ++i)
-        {
-            delete[] m_audioData[i];
-            if (m_audio2Buffer[i].pContext)
-                delete m_audio2Buffer[i].pContext;
-        }
-        delete[] m_audioData;
-        delete[] m_audio2Buffer;
+        deleteBuffer();
 
         m_maxBufferCount = maxBufferCount;
         m_streamingBufferSize = streamingBufferSize;
@@ -170,7 +208,7 @@ void XAudioPlay::setFormat(int bitsPerSample, int channels, int freq)
     m_waveFormat.wBitsPerSample = bitsPerSample;
     m_waveFormat.nChannels = channels;
     m_waveFormat.nSamplesPerSec = freq;
-    m_waveFormat.nBlockAlign = bitsPerSample * channels;
+    m_waveFormat.nBlockAlign = bitsPerSample / 8 * channels;
     m_waveFormat.nAvgBytesPerSec = m_waveFormat.nBlockAlign * freq;
     m_waveFormat.cbSize = 0;
 
@@ -182,7 +220,38 @@ void XAudioPlay::setFormat(int bitsPerSample, int channels, int freq)
         &m_voiceCallBack,
         nullptr,
         nullptr);
-
+     
     if (FAILED(lRet))
         return;
+}
+
+void XAudioPlay::readData(unsigned char *buffer, int length)
+{
+    int readPos = 0;
+    bool isFirstSubmit = true;
+    while (length > readPos)
+    {
+        while (m_unProcessedBufferCount + m_unReadingBufferCount >= m_maxBufferCount - 1)
+        {
+            if (isFirstSubmit)
+            {
+                isFirstSubmit = false;
+                m_voiceCallBack.OnBufferEnd(nullptr);
+            }
+            WaitForSingleObject(m_voiceCallBack.m_hBufferEndEvent, INFINITE);
+        }
+        if (m_streamingBufferSize > length - readPos)
+        {
+            memcpy_s(m_audioData[m_writingBufferNumber], m_streamingBufferSize, buffer + readPos, length - readPos);
+            memset(m_audioData[m_writingBufferNumber] + length - readPos, 0, m_streamingBufferSize - (length - readPos));
+            break;
+        }
+        if (m_streamingBufferSize <= length - readPos)
+        {
+            memcpy_s(m_audioData[m_writingBufferNumber], m_streamingBufferSize, buffer + readPos, m_streamingBufferSize);
+            readPos += m_streamingBufferSize;
+        }
+        m_writingBufferNumber = (1 + m_writingBufferNumber) % m_maxBufferCount;
+        ++m_unReadingBufferCount;
+    }
 }

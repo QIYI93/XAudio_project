@@ -37,3 +37,13 @@
 /Debug/
 /Release/
 /.vs/
+
+#binaries
+*.tlog
+*.opendb
+*.db
+*.suo
+*.pdb
+*.ilk
+
+#folders

@@ -38,6 +38,7 @@ class XAudioPlay
 {
 
 public:
+    friend class VoiceCallBack;
     XAudioPlay();
     XAudioPlay(XAudioPlay&) = delete;
     ~XAudioPlay();
@@ -46,9 +47,11 @@ public:
     void pause();
     void startPlaying();
     void stopPlaying();
+    void readData(unsigned char *buffer, int length); //blocking
 
 private:
     void reset();
+    void deleteBuffer();
     void setBufferSize(int maxBufferCount, int streamingBufferSize);
 
     static XAUDIO2_BUFFER makeXAudio2Buffer(const BYTE *pBuffer, int BufferSize);//生成XAudio2缓冲区
@@ -68,12 +71,11 @@ private:
     bool m_isPlaying;                           //是否在播放
     bool m_isValid = false;
 
-    //HRESULT State;//状态，0为正常，<0为错误，>0为信息或警告
-    //const wchar_t *pState;//状态内容详细描述
-
-    int m_readingBufferNumber;//正在读取的Buffer
-    int m_writingBufferNumber;//正在写入的Buffer
+    int m_readingBufferNumber = 0;//正在读取的Buffer
+    int m_writingBufferNumber = 0;//正在写入的Buffer
     int m_unReadingBufferCount;//未呈交Buffer数量
+
+
     int m_unProcessedBufferCount;//呈交但未处理的Buffer数量
     int m_writingPosition;//当前块准备写入位置
 };
