@@ -1,7 +1,7 @@
 #ifndef XAUDIOPLAY_H
 #define XAUDIOPLAY_H
 
-#include "dxsdk/XAudio2.h"
+#include <xaudio2.h>
 
 #define DEF_MaxBufferCount 4
 #define DEF_StreamingBufferSize 40960

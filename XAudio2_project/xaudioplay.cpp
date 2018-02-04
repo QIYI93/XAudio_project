@@ -65,7 +65,6 @@ XAudioPlay::XAudioPlay()
         return;
 
     setBufferSize(DEF_MaxBufferCount, DEF_StreamingBufferSize);
-    m_waveFormat.nChannels = 2; //default
 
     lRet = m_XAudio2->CreateSourceVoice(&m_sourceVoice,
         &m_waveFormat,
@@ -133,6 +132,15 @@ void XAudioPlay::reset()
     m_writingPosition = 0;
     m_voiceCallBack.m_count = 0;
     m_voiceCallBack.m_lastContext = 0;
+
+    m_waveFormat.wFormatTag = WAVE_FORMAT_PCM;
+    m_waveFormat.wBitsPerSample = 16;
+    m_waveFormat.nChannels = 2;
+    m_waveFormat.nSamplesPerSec = 44100;
+    m_waveFormat.nBlockAlign = m_waveFormat.wBitsPerSample / 8 * m_waveFormat.nChannels;
+    m_waveFormat.nAvgBytesPerSec = m_waveFormat.nBlockAlign * m_waveFormat.nSamplesPerSec;
+    m_waveFormat.cbSize = 0;
+
 }
 
 void XAudioPlay::stopPlaying()

@@ -1,7 +1,9 @@
 #include <Windows.h>
 #include <iostream>
-#include "dxsdk/XAudio2.h" 
+#include <xaudio2.h> 
 #include "xaudioplay.h"
+
+#pragma comment(lib,"xaudio2.lib")
 
 int main(int argc, char *argv[])
 {
